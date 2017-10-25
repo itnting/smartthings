@@ -15,18 +15,18 @@
  *  Author: doIHaveTo
  */
 definition(
-    name: "ThermostatMonitor",
+    name: "ThermostatMonitor2",
     namespace: "doIHaveTo",
     author: "doIHaveTo",
-    description: "Monitor the thermostat temprature (and setPointChange) and when it drops below heating setpoint turn on a switch.",
+    description: "Monitor the thermostat mode and turn on a switch when needed.",
     category: "Convenience",
     iconUrl: "https://s3.amazonaws.com/smartapp-icons/Meta/temp_thermo-switch.png",
     iconX2Url: "https://s3.amazonaws.com/smartapp-icons/Meta/temp_thermo-switch@2x.png"
 )
 
 preferences {
-	section("Monitor the temperature of...") {
-		input "temperatureSensor1", "capability.temperatureMeasurement"
+	section("Monitor mode of which thermostat of...") {
+		input "temperatureSensor", "capability.thermostat"
 	}
 	section( "Notifications" ) {
         input("recipients", "contact", title: "Send notifications to") {
@@ -40,63 +40,36 @@ preferences {
 }
 
 def installed() {
-	subscribe(temperatureSensor1, "temperature", temperatureHandler)
-    subscribe(temperatureSensor1, "heatingSetpoint",setPointHandler)
+	subscribe(temperatureSensor, "thermostatMode", thermostatModeHandler)
 }
 
 def updated() {
 	unsubscribe()
-	subscribe(temperatureSensor1, "temperature", temperatureHandler)
-    subscribe(temperatureSensor1, "heatingSetpoint", setPointHandler)
+    subscribe(temperatureSensor, "thermostatMode", thermostatModeHandler)
 }
 
-def setPointHandler(evt) {
-	log.debug "SetPoint Changed: $evt.value"
-    doSwitch(evt)
-}
-
-def temperatureHandler(evt) {
-	log.debug "Temp Changed: $evt.value"
-    doSwitch(evt)
-}
-
-def doSwitch(evt) {
-	def tempSensor = evt.displayName
-    def temp = temperatureSensor1.currentValue("temperature")
-    def setpoint = temperatureSensor1.currentValue("heatingSetpoint")
+def thermostatModeHandler(evt) {
+	log.debug "Thermostat Mode Changed: $evt.value"
+	def edn = evt.displayName
     
-    if (temp < setpoint) {
-	    
-        def currSwitches = conSwitches.currentSwitch
+    if (evt.value == "heat") {
+	    def currSwitches = conSwitches.currentSwitch
         def offSwitches = currSwitches.findAll { it == "off" ? true : false }
                
         if (offSwitches.size() != 0) {
-        		log.debug "${tempSensor} Heat:On T:${temp} S:${setpoint} Activating ${conSwitches}"
+        		log.debug "Heat:On, activating ${conSwitches}"
                 conSwitches.on()
-                send("${tempSensor} Heat:On T:${temp} S:${setpoint}")
-    			/* old code to test if already sent msg */
-    			/*def deltaMinutes = 1 // TODO: Ask for "retry interval" in prefs?
-				def timeAgo = new Date(now() - (1000 * 60 * deltaMinutes).toLong())
-				def recentEvents = temperatureSensor1.eventsSince(timeAgo)?.findAll { it.name == "temperature" || it.name == "heatingSetpoint"}
-    		    def alreadySentSms = recentEvents.count { it.doubleValue < setpoint } > 1
-    	   		if (alreadySentSms) {
-					log.debug "SMS already sent within the last $deltaMinutes minutes"
-				} else {
-					log.debug "Temperature below $setpoint:  sending SMS"
-					def tempScale = location.temperatureScale ?: "C"
-					send("${tempSensor} reporting a temperature of ${temp} setpoint is ${setpoint}")
-				} */
-        }
+                send("${evt.value} Heat:On")
+    	}
     }
-    else if (temp >= setpoint) {
+    else if (evt.value == "off") {
     	def currSwitches = conSwitches.currentSwitch
     	def onSwitches = currSwitches.findAll { it == "on" }
-        log.debug "${tempSensor} Heat:On T:${temp} S:${setpoint} - ${conSwitches}"
-    	        
+                
         if (onSwitches.size() != 0) {
-        	log.debug "${tempSensor} Heat:On T:${temp} S:${setpoint} De-activating ${conSwitches}"
+        	log.debug "Heat:off de-activating ${conSwitches}"
             conSwitches.off()
-            send("${tempSensor} H:Off T:${temp} S:${setpoint}")
+            send("${evt.value} H:Off")
         }
     }
 }
