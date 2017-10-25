@@ -1,0 +1,164 @@
+/**
+ *  Copyright 2015 SmartThings
+ *
+ *  Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+ *  in compliance with the License. You may obtain a copy of the License at:
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software distributed under the License is distributed
+ *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
+ *  for the specific language governing permissions and limitations under the License.
+ *
+ */
+metadata {
+	definition (name: "HouseTemps2", namespace: "itnting/testing", author: "itnting") {
+		capability "Button"
+        capability "Thermostat"
+                
+        command "quickSetHeat"
+		command "setTemperature"
+        command "setTempUp"
+		command "setTempDown"
+        command "setToLocModeTemp"
+    }
+
+	simulator {
+
+	}
+	tiles {
+		multiAttributeTile(name:"heatingSetpoint", type: "thermostat", width: 6, height: 4, canChangeIcon: true)
+        {
+            tileAttribute ("device.heatingSetpoint", key: "PRIMARY_CONTROL") 
+            {
+                attributeState("default", unit:"dC", label:'${currentValue}°')
+            }
+            
+            tileAttribute("device.heatingSetpoint", key: "VALUE_CONTROL") 
+            {
+                attributeState("VALUE_UP", action: "setTempUp")
+                attributeState("VALUE_DOWN", action: "setTempDown")
+            }
+        }
+        
+     	valueTile("Home", "device.Home", width: 1, height: 1) {
+        	state "Home", label:'Home \n ${currentValue}'
+   		}
+ 	    valueTile("Away", "device.Away", width: 1, height: 1) {
+        	state "Away", label:'Away \n ${currentValue}'
+   		}
+ 	    valueTile("Sleep", "device.Sleep", width: 1, height: 1) {
+        	state "Sleep", label:'Sleep \n ${currentValue}'
+   		}		
+	}
+}
+
+def parse(String description) {
+}
+
+def updated() {
+	if (device.currentValue("heatingSetpoint") == null) { quickSetHeat(18) }
+   log.trace "Temps Updated!"
+}
+
+def quickSetHeat(degrees) 
+{
+	setHeatingSetpoint(degrees)
+    log.debug("quicksetheat: $degrees")
+    updateLocModeTemp(degrees)
+    //refresh()
+}
+
+private updateLocModeTemp(degrees) {
+    //def sLocMode = null
+    
+    def locationMode = location.currentMode
+    def aTemp = device.currentState("${locationMode}")
+    if (aTemp != null) {
+    	def temp = aTemp.getValue()
+        if (temp != degrees) {
+      		log.debug "Updating ${locationMode} ${temp} with ${degrees}"
+        	sendEvent(name:"${locationMode}", value:degrees)
+        }
+    }
+    else {
+    	log.debug "Updating ${locationMode} ${temp} with ${degrees}"
+       	sendEvent(name:"${locationMode}", value:degrees)
+    }
+}
+
+def setToLocModeTemp() {
+    def locationMode = location.currentMode
+    def aTemp = device.currentState("${locationMode}")
+    def hTemp = device.currentValue("heatingSetpoint").toInteger()
+    
+    if (aTemp != null) {
+    	def lmTemp = aTemp.getValue()
+		if (lmTemp != degrees) {
+    		log.debug "Setting ${device.displayName} ${locationMode} temp to ${lmTemp}"
+    	    quickSetHeat(lmTemp)
+     	  	
+        }
+    }
+    else {
+    	log.debug "Location mode value ${locationMode} set to: ${hTemp}"
+        // call quickSetHeat with current setpoint will update values
+    	quickSetHeat(hTemp)
+    }
+}
+
+
+def setTempUp() 
+{ 
+    def newtemp = device.currentValue("heatingSetpoint").toInteger() + 1
+    quickSetHeat(newtemp)
+	    
+}
+
+def setTempDown() 
+{ 
+    def newtemp = device.currentValue("heatingSetpoint").toInteger() - 1
+    quickSetHeat(newtemp)
+}
+
+def setTemperature(temp)
+{
+
+	log.debug "setTemperature $temp"
+    quickSetHeat(temp)
+}
+
+def setHeatingSetpoint(degrees) 
+{
+	setHeatingSetpoint(degrees.toDouble())
+}
+
+def setHeatingSetpoint(Double degrees) 
+{
+    sendEvent(name: 'heatingSetpoint', value: degrees)
+
+	def deviceScale = state.scale ?: 1
+	def deviceScaleString = deviceScale == 2 ? "C" : "F"
+    def locationScale = getTemperatureScale()
+    def p = (state.precision == null) ? 1 : state.precision
+
+    def convertedDegrees
+    if (locationScale == "C" && deviceScaleString == "F") 
+    {
+        convertedDegrees = celsiusToFahrenheit(degrees)
+    } 
+    else if (locationScale == "F" && deviceScaleString == "C") 
+    {
+        convertedDegrees = fahrenheitToCelsius(degrees)
+    } 
+    else 
+    {
+        convertedDegrees = degrees
+    }
+
+	log.trace "setHeatingSetpoint scale: $deviceScale precision: $p setpoint: $convertedDegrees"
+	state.deviceScale = deviceScale
+    state.p = p
+    state.convertedDegrees = convertedDegrees
+  
+}
