@@ -15,11 +15,11 @@
  *  Author: doIHaveTo
  */
 definition(
-    name: "ThermostatMonitor2",
-    namespace: "doIHaveTo",
-    author: "doIHaveTo",
-    description: "Monitor the thermostat mode and turn on a switch when needed.",
-    category: "Convenience",
+    name: "ThermostatMonitor",
+    namespace: "itnting",
+    author: "itnting",
+    description: "Monitor the thermostat mode and tursn on/off switches when needed.",
+    category: "My Apps",
     iconUrl: "https://s3.amazonaws.com/smartapp-icons/Meta/temp_thermo-switch.png",
     iconX2Url: "https://s3.amazonaws.com/smartapp-icons/Meta/temp_thermo-switch@2x.png"
 )
@@ -28,6 +28,9 @@ preferences {
 	section("Monitor mode of which thermostat of...") {
 		input "temperatureSensor", "capability.thermostat"
 	}
+    section("Minimum time") {
+    	input name:"minTime", type:number, title: "Minimum time", description: "Minimum time between changes", required: false, defaultValue:10	 
+    }
 	section( "Notifications" ) {
         input("recipients", "contact", title: "Send notifications to") {
             input "sendPushMessage", "enum", title: "Send a push notification?", options: ["Yes", "No"], required: false
@@ -41,35 +44,69 @@ preferences {
 
 def installed() {
 	subscribe(temperatureSensor, "thermostatMode", thermostatModeHandler)
+    subscribe(temperatureSensor, "temprature", tempratureHandler)
 }
 
 def updated() {
 	unsubscribe()
     subscribe(temperatureSensor, "thermostatMode", thermostatModeHandler)
+    subscribe(temperatureSensor, "temprature", tempratureHandler)
+}
+
+def tempratureHandler(evt) {
+	def msMinTime = minTime.toInteger() * 60 * 1000
+	log.debug "${minTime} ${(new Date().time) - state.lasttempChange} ${msMinTime}"
+	log.trace "${tempratureSensor.currentvalue("thermostatMode")}"
+    // Only do anything if this has happened after the minTime
+    
+    if (!state.lastTempChange || ( (new Date().time) - state.lastTempChange ) > msMinTime) 
+    {
+		log.debug "${evt.displayName} temp changed to $evt.value" 	
+    	checkMode(evt)
+    }
+    else {
+    	log.debug "${evt.displayName} temp changed but don't to do anything yet"
+    }
+    state.lastTempChange = new Date().time
+
 }
 
 def thermostatModeHandler(evt) {
-	log.debug "Thermostat Mode Changed: $evt.value"
-	def edn = evt.displayName
-    
-    if (evt.value == "heat") {
-	    def currSwitches = conSwitches.currentSwitch
-        def offSwitches = currSwitches.findAll { it == "off" ? true : false }
-               
-        if (offSwitches.size() != 0) {
-        		log.debug "Heat:On, activating ${conSwitches}"
-                conSwitches.on()
-                send("${evt.value} Heat:On")
-    	}
+
+    // Only do anything if this has happened after the minTime
+    def msMinTime = minTime.toInteger() * 60 * 1000
+	log.debug "${minTime} ${new Date().time - state.lastModeChange} ${msMinTime}"
+    if (!state.lastModeChange || ( (new Date().time) - state.lastModeChange ) > msMintime) 
+    {
+		log.debug "${evt.displayName} mode changed to ${evt.value}" 	
+    	checkMode(evt)
     }
+    else {
+    	log.debug "${evt.displayName} mode changed but don't to do anything yet"
+    }
+    state.lastModeChange = new Date().time
+}
+
+private checkMode(evt) {
+	if (evt.value == "heat") {
+        def currSwitches = conSwitches.currentSwitch
+        def offSwitches = currSwitches.findAll { it == "off" ? true : false }
+
+        if (offSwitches.size() != 0) {
+            log.debug "${evt.displayName}, ${evt.value}, activating ${conSwitches}"
+            for (s in conSwitches) { s.on() }		
+            send("${evt.displayName}, ${evt.value}, activating ${conSwitches}")
+         }
+     }
+
     else if (evt.value == "off") {
-    	def currSwitches = conSwitches.currentSwitch
-    	def onSwitches = currSwitches.findAll { it == "on" }
-                
+        def currSwitches = conSwitches.currentSwitch
+        def onSwitches = currSwitches.findAll { it == "on" ? true : false  }
+
         if (onSwitches.size() != 0) {
-        	log.debug "Heat:off de-activating ${conSwitches}"
-            conSwitches.off()
-            send("${evt.value} H:Off")
+            log.debug "${evt.displayName}, ${evt.value}, de-activating ${conSwitches}"
+            for (s in conSwitches) { s.off() }
+            send("${evt.displayName}, ${evt.value}, de-activating ${conSwitches}")
         }
     }
 }
