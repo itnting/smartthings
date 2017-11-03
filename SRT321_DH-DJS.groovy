@@ -1,4 +1,4 @@
-*
+/*
  * SRT321 Thermostat by MeavyDev
  * With support for an associated switch set by the SRT321 helper app
  */
@@ -12,7 +12,6 @@ metadata
 		capability "Configuration"
 		capability "Polling"
 		capability "Sensor"
-   		capability "Refresh"
 
 
 		command "switchMode"
@@ -39,7 +38,7 @@ metadata
         {
             tileAttribute ("device.heatingSetpoint", key: "PRIMARY_CONTROL") 
             {
-                attributeState("default", unit:"dC", label:'${currentValue}°')
+                attributeState("default", unit:"dC", label:'${currentValue}Â°')
             }
             
             tileAttribute("device.heatingSetpoint", key: "VALUE_CONTROL") 
@@ -130,22 +129,22 @@ metadata
 
 def parse(String description)
 {
-	log.debug "SRT321 Parse $description"
+	log.debug "${device.displayName} Parse $description"
 
 	def result = zwaveEvent(zwave.parse(description, [0x72:1, 0x86:1, 0x80:1, 0x84:2, 0x31:1, 0x43:1, 0x85:1, 0x70:1, 0xEF:1, 0x40:1, 0x25:1]))
 	if (!result) 
     {
-    	log.warn "SRT321 Parse returned null"
+    	log.warn "${device.displayName} Parse returned null"
 		return null
 	}
     
-	log.debug "SRT321 Parse returned $result"
+	log.debug "${device.displayName} Parse returned $result"
 	result
 }
 
 def updated() 
 {
-	log.debug "SRT321 preferences updated"
+	log.debug "${device.displayName} preferences updated"
 	sendEvent(name:"Home", value:sHome)
     sendEvent(name:"Away", value:sAway)
     sendEvent(name:"Sleep", value:sSleep)
@@ -209,7 +208,7 @@ def zwaveEvent(physicalgraph.zwave.commands.wakeupv2.WakeUpNotification cmd)
         
 		cmds << zwave.wakeUpV2.wakeUpNoMoreInformation().format()
         
-        log.debug "Wakeup $cmds"
+        log.debug "${device.displayName} Wakeup $cmds"
 
         [event, response(delayBetween(cmds, 1000))]      
 }
@@ -226,7 +225,7 @@ def zwaveEvent(physicalgraph.zwave.commands.batteryv1.BatteryReport cmd)
     else 
     {
             map.value = cmd.batteryLevel
-            log.debug ("Battery: $cmd.batteryLevel")
+            log.debug ("${device.displayName} Battery: $cmd.batteryLevel")
     }
     // Store time of last battery update so we don't ask every wakeup, see WakeUpNotification handler
     state.lastbatt = new Date().time
@@ -267,7 +266,7 @@ def zwaveEvent(physicalgraph.zwave.commands.wakeupv2.WakeUpIntervalReport cmd)
 
 def zwaveEvent(physicalgraph.zwave.commands.basicv1.BasicReport cmd) 
 {
-	log.debug "Zwave event received: $cmd"
+	log.debug "${device.displayName} Zwave event received: $cmd"
 }
 
 def zwaveEvent(physicalgraph.zwave.Command cmd) 
@@ -288,7 +287,7 @@ def zwaveEvent(physicalgraph.zwave.Command cmd)
 
 def configure() 
 {
-	log.debug "SRT321 configure"
+	log.debug "${device.displayName} configure"
 	state.configNeeded = true
     
     // Normally this won't do anything as the thermostat is asleep, 
@@ -309,7 +308,7 @@ def configure()
 
 def poll() 
 {
-	log.debug "poll"
+	log.debug "${device.displayName} poll"
 
 	// Normally this won't do anything as the thermostat is asleep, 
     // but do this in case it helps with the initial config
@@ -323,11 +322,7 @@ def poll()
 
 def refresh()
 {
-	log.debug "SRT321 Refresh"
-
-	sendEvent(name:"Home", value:sHome)
-    sendEvent(name:"Away", value:sAway)
-    sendEvent(name:"Sleep", value:sSleep)
+	log.debug "${device.displayName} Refresh"
 	
     state.refreshNeeded = true    
     // Normally this won't do anything as the thermostat is asleep, 
@@ -341,10 +336,11 @@ def refresh()
 }
 
 def quickSetHeat(degrees) {
-	setHeatingSetpoint(degrees)
-    log.debug("Degrees at quicksetheat: $degrees")
+	log.debug("${device.displayName} set LMT to: $degrees")
 	updateLocModeTemp(degrees)
-    refresh()
+    log.debug("${device.displayName} Degrees at quicksetheat: $degrees")
+    setHeatingSetpoint(degrees)
+    
 }
 
 private updateLocModeTemp(degrees) {
@@ -354,17 +350,15 @@ private updateLocModeTemp(degrees) {
     if (aTemp != null) {
     	def lmTemp = aTemp.getValue()
         if (lmTemp != degrees) {
-      		log.debug "Updating ${locationMode} ${lmTemp} with ${degrees}"
-        	device.updateSetting("s${locationMode}", degrees)
-//      	sendEvent(name:"${locationMode}", value:degrees)
+      		log.debug "${device.displayName} Updating ${locationMode} ${lmTemp} with ${degrees}"
         }
     }
     else {
-    	log.debug "Updating ${locationMode} ${lmTemp} with ${degrees}"
-        device.updateSetting("s${locationMode}", degrees)
-//     	sendEvent(name:"${locationMode}", value:degrees)
-    }
-    
+    	log.debug "${device.displayName} Updating ${locationMode} null with ${degrees}"
+        
+    }  
+    device.updateSetting("s${locationMode}", degrees)
+    sendEvent(name:"${locationMode}", value:degrees)
 }
 
 def setToLocModeTemp() {
@@ -376,44 +370,44 @@ def setToLocModeTemp() {
 	if (aTemp != null) {
     	def lmTemp = aTemp.getValue()
         if (lmTemp != degrees) {
-            log.debug "Setting ${device.displayName} ${locationMode} temp to ${lmTemp}"
+            log.debug "Setting ${device.displayName} to to ${lmTemp} at ${locationMode}"
             quickSetHeat(lmTemp)
         }
     }
     else {
-    	log.debug "Location mode value ${locationMode} set to: ${hTemp}"
+    	log.debug "${device.displayName} Location mode value ${locationMode} set to: ${hTemp}"
         // call quickSetHeat with current setpoint will update values
-        device.updateSetting("s${locationMode}", hTemp)
+        device.updateSetting("${device.displayName} s${locationMode}", hTemp)
     	quickSetHeat(hTemp)
     }
 }
 
 def setTempUp() { 
     def newtemp = device.currentValue("heatingSetpoint").toInteger() + 1
-    log.debug "Setting temp up: $newtemp"
+    log.debug "${device.displayName} Setting temp up: $newtemp"
     quickSetHeat(newtemp)
 }
 
 def setTempDown() { 
     def newtemp = device.currentValue("heatingSetpoint").toInteger() - 1
-    log.debug "Setting temp down: $newtemp"
+    log.debug "${device.displayName} Setting temp down: $newtemp"
     quickSetHeat(newtemp)
 }
 
 def setTemperature(temp) {
-	log.debug "setTemperature $temp"
+	log.debug "${device.displayName} setTemperature ${temp}"
     quickSetHeat(temp)
 }
 
 def setHeatingSetpoint(degrees) 
 {
 	setHeatingSetpoint(degrees.toDouble())
-	log.debug("Degrees at setheatpoint: $degrees")
+	log.debug("${device.displayName} Degrees at setheatpoint: ${degrees}")
 }
 
 def setHeatingSetpoint(Double degrees) 
 {
-	log.trace "setHeatingSetpoint($degrees)"
+	log.debug "${device.displayName} setheatpoint: ${degrees}"
     sendEvent(name: 'heatingSetpoint', value: degrees)
 
 	def deviceScale = state.scale ?: 1
@@ -435,7 +429,7 @@ def setHeatingSetpoint(Double degrees)
         convertedDegrees = degrees
     }
 
-	log.trace "setHeatingSetpoint scale: $deviceScale precision: $p setpoint: $convertedDegrees"
+	log.debug "${device.displayName} setHeatingSetpoint scale: ${deviceScale} precision: ${p} setpoint: ${convertedDegrees}"
 	state.deviceScale = deviceScale
     state.p = p
     state.convertedDegrees = convertedDegrees
@@ -456,13 +450,13 @@ def updateIfNeeded()
     // Only ask for battery if we haven't had a BatteryReport in a while
     if (!state.lastbatt || (new Date().time) - state.lastbatt > 24*60*60*1000) 
     {
-    	log.debug "Getting battery state"
+    	log.debug "${device.displayName} getting battery state"
     	cmds << zwave.batteryV1.batteryGet().format()
     }
         
 	if (state.refreshNeeded)
     {
-        log.debug "Refresh"
+        log.debug "${device.displayName} Refresh"
         cmds << zwave.sensorMultilevelV1.sensorMultilevelGet().format() // current temperature
 		cmds << zwave.thermostatSetpointV1.thermostatSetpointGet(setpointType: physicalgraph.zwave.commands.thermostatsetpointv1.ThermostatSetpointSet.SETPOINT_TYPE_HEATING_1).format()
 
@@ -474,7 +468,7 @@ def updateIfNeeded()
     
     if (state.updateNeeded)
     {
-        log.debug "Update"
+        log.debug "${device.displayName} Update"
 
 		cmds << zwave.thermostatSetpointV1.thermostatSetpointSet(setpointType: physicalgraph.zwave.commands.thermostatsetpointv1.ThermostatSetpointSet.SETPOINT_TYPE_HEATING_1, scale: state.deviceScale, precision: state.p, scaledValue: state.convertedDegrees).format()
         state.updateNeeded = false
@@ -482,7 +476,7 @@ def updateIfNeeded()
     
     if (state.configNeeded)
     {
-        log.debug "Config"
+        log.debug "${device.displayName} Config"
     	state.configNeeded = false
         
         // Nodes controlled by Thermostat Mode Set - not sure this is needed?
@@ -500,12 +494,12 @@ def updateIfNeeded()
         // set the temperature sensor On
 		cmds << zwave.configurationV1.configurationSet(configurationValue: [0xff], parameterNumber: 1, size: 1).format()
 
-		log.debug "association $state.association user: $userAssociatedDevice"
+		log.debug "${device.displayName} association $state.association user: $userAssociatedDevice"
 		int nodeID = getAssociatedId(state.association)
         // If user has changed the switch association, send the new assocation to the device 
     	if (nodeID != -1)
         {
-            log.debug "Setting associated device $nodeID"
+            log.debug "${device.displayName} setting associated device $nodeID"
             cmds << zwave.associationV1.associationSet(groupingIdentifier: 2, nodeId: nodeID).format()
         }
         
@@ -514,7 +508,7 @@ def updateIfNeeded()
     	if (state.wakeUpInterval != userWake)
         {
        		state.wakeUpInterval = userWake
-            log.debug "Setting New WakeUp Interval to: " + state.wakeUpInterval
+            log.debug "${device.displayName} wakeUp Interval to: " + state.wakeUpInterval
         	cmds << zwave.wakeUpV2.wakeUpIntervalSet(seconds:state.wakeUpInterval, nodeid:zwaveHubNodeId).format()
        		cmds << zwave.wakeUpV2.wakeUpIntervalGet().format()
     	}  
@@ -553,11 +547,11 @@ int getAssociatedId(association)
 {
 	int associatedState = -1
 	int associatedUser = -1
-    log.debug "getAssociatedId $association"
+    log.debug "${device.displayName} getAssociatedId $association"
 	if (association != null && association != "")
     {
     	associatedState = association.toInteger()
-        log.debug "State $association $associatedState"
+        log.debug "${device.displayName} State $association $associatedState"
     }
     if (userAssociatedDevice != null && userAssociatedDevice != "")
     {
@@ -568,7 +562,7 @@ int getAssociatedId(association)
         catch (Exception e)
         {
         }
-        log.debug "userDev $userAssociatedDevice $associatedUser"
+        log.debug "${device.displayName} userDev $userAssociatedDevice $associatedUser"
     }
     
     // Use the app associated switch id if it exists, otherwise the device preference  
@@ -583,7 +577,7 @@ void setupDevice(value)
 	state.association = "$value"
     int val = Integer.parseInt(value)
     String hex = Integer.toHexString(val)
-    log.debug "Setting associated device Id $value Hex $hex"
+    log.debug "${device.displayName} Setting associated device Id $value Hex $hex"
     settings.userAssociatedDevice = hex
     state.configNeeded = true
 }
