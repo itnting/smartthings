@@ -55,36 +55,39 @@ def updated() {
 
 def tempratureHandler(evt) {
 	def msMinTime = minTime.toInteger() * 60 * 1000
-	log.debug "${minTime} ${(new Date().time) - state.lasttempChange} ${msMinTime}"
+	def difTime =new Date().time - state.lastModeChange
+	log.debug "${minTime} ${difTime} ${msMinTime} ${state.lastTempChange}"
 	log.trace "${tempratureSensor.currentvalue("thermostatMode")}"
     // Only do anything if this has happened after the minTime
     
-    if (!state.lastTempChange || ( (new Date().time) - state.lastTempChange ) > msMinTime) 
+    if (!state.lastTempChange || ( difTime > msMinTime) ) 
     {
 		log.debug "${evt.displayName} temp changed to $evt.value" 	
     	checkMode(evt)
+        state.lastTempChange = new Date().time
     }
     else {
     	log.debug "${evt.displayName} temp changed but don't to do anything yet"
     }
-    state.lastTempChange = new Date().time
-
+    
 }
 
 def thermostatModeHandler(evt) {
 
     // Only do anything if this has happened after the minTime
     def msMinTime = minTime.toInteger() * 60 * 1000
-	log.debug "${minTime} ${new Date().time - state.lastModeChange} ${msMinTime}"
-    if (!state.lastModeChange || ( (new Date().time) - state.lastModeChange ) > msMintime) 
+    def difTime =new Date().time - state.lastModeChange
+	log.debug "${minTime} ${difTime} ${msMinTime} ${state.lastModeChange} ${( difTime > msMinTime)}"
+    if (!state.lastModeChange || ( difTime > msMinTime) ) 
     {
 		log.debug "${evt.displayName} mode changed to ${evt.value}" 	
     	checkMode(evt)
+        state.lastModeChange = new Date().time
     }
     else {
     	log.debug "${evt.displayName} mode changed but don't to do anything yet"
     }
-    state.lastModeChange = new Date().time
+    
 }
 
 private checkMode(evt) {
